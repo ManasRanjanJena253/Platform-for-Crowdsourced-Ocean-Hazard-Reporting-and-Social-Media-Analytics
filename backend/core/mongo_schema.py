@@ -30,7 +30,7 @@ user_validation = {
                  "description": "The role of the user i.e. an official or a normal citizen reporting."
              },
              "hashed_pwd": {
-                 "bsonType": "binData",
+                 "bsonType": "string",
                  "description": "The hashed password of the user for security."
              }
          }}
