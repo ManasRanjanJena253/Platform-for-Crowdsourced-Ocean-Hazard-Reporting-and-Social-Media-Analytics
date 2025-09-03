@@ -1,4 +1,11 @@
-fastapi
-motor
+fastapi~=0.116.1
+motor~=3.7.1
 scikit-learn
-asyncio
+asyncio~=4.0.0
+firebase-admin~=7.1.0
+passlib~=1.7.4
+dotenv~=0.9.9
+python-dotenv~=1.1.1
+python-multipart
+uvicorn
+cloudinary

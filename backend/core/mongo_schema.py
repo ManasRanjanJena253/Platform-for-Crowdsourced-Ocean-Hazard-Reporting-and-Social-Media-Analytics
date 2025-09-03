@@ -5,7 +5,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 client = AsyncIOMotorClient(host = "localhost", port = 27017)
 
 db_name = "Crowd_Sourced_Ocean_Hazard_Reporting"
-db = client[db_name]
+
 
 # Collections to be made :
 # user : Stores all the data related to the user
@@ -39,7 +39,7 @@ user_validation = {
 reports_validation = {
     "$jsonSchema":
         {"bsonType": "object",
-         "required": ["user_id", "report_id", "location", "timestamp"],
+         "required": ["user_id", "report_id", "location", "timestamp", "report_url"],
          "properties":{
              "user_id": {
                  "bsonType": "string",
@@ -108,6 +108,8 @@ hotspot_validation = {
 }
 
 async def create_collections():
+    # await client.drop_database(db_name)
+    db = client[db_name]
     collections = ["user", "hotspot", "reports"]
     validators = [user_validation, hotspot_validation, reports_validation]
     built_collections = await db.list_collections()
