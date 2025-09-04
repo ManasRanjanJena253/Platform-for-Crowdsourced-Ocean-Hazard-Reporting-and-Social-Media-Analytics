@@ -1,7 +1,7 @@
 import os
 from datetime import datetime, UTC
 import requests
-from fastapi import FastAPI, Form, UploadFile, Request, Response
+from fastapi import FastAPI, Form, UploadFile, Request, Response, File
 from fastapi.middleware.cors import CORSMiddleware
 import cloudinary
 import cloudinary.uploader
@@ -11,6 +11,9 @@ from passlib.hash import bcrypt
 import uuid
 from dotenv import load_dotenv
 import uvicorn
+import tempfile
+import shutil
+from geopy.geocoders import Nominatim
 
 load_dotenv()
 app = FastAPI()
@@ -28,20 +31,24 @@ cloudinary.config(
     api_secret = os.getenv("CLOUDINARY_API_SECRET")
 )
 
-def upload_file(file_path: str, folder: str = "hazard_reports_by_user"):
+async def upload_file(file: UploadFile, folder: str = "hazard_reports_by_user"):
     """
-    Uploads a file to Cloudinary and returns its secure URL.
-    :param file_path: Local path to the file to upload
-    :param folder: Cloudinary folder name to store the file
-    :return: Secure URL of the uploaded file
+    Uploads a file (from FastAPI UploadFile) to Cloudinary and returns its secure URL.
     """
     try:
+        # Save the uploaded file temporarily
+        with tempfile.NamedTemporaryFile(delete = False) as tmp:
+            shutil.copyfileobj(file.file, tmp)
+            tmp_path = tmp.name
+
+        # Upload to Cloudinary
         result = cloudinary.uploader.upload(
-            file_path,
+            tmp_path,
             folder = folder,
             resource_type = "auto"  # auto-detects image/video/pdf
         )
         return result["secure_url"]
+
     except Exception as e:
         print(f"Cloudinary upload failed: {e}")
         return None
@@ -103,58 +110,51 @@ async def sign_in(user_name: str = Form(...), password: str = Form(...), role: s
     user_id = await generate_uuid()
     try:
         await user_collection.insert_one({"user_name": user_name, "user_id": user_id, "hashed_pwd": hashed_pwd, "role": role.lower()})
-        return {"Status": "Successful"}
+        return {"Status": "Successful", "user_id": user_id}
     except Exception as e:
         raise HTTPException(status_code = 400, detail = str(e))
 
 @app.post("/login")
-async def login(user_name: str = Form(...), password: str = Form(...), role: str = Form(...)):
+async def login(user_name: str = Form(...), password: str = Form(...)):
     """
     API endpoint for logging in pre-registered users
     :param user_name: The name of the user
     :param password: The password of the user
-    :param role: The role of the user i.e. either official or citizen
     :return: Confirmation
     """
     user_id = await authorize_user(user_name, password)
     if user_id:
-        return user_id
+        return {"user_id": user_id}
     else:
         raise HTTPException(status_code = 400, detail = "Invalid Credentials")
 
 @app.post("/{user_id}/upload_report")
-async def upload_report(user_id, location, file = UploadFile(...)):
+async def upload_report(user_id, latitude, longitude, file: UploadFile = File(...)):
     report_id = await generate_report_id()
     time = datetime.now(UTC)
+    geolocator = Nominatim(user_agent="geoapi")      # Used to get the area name where the latitude and longitude lies.
+    location = geolocator.reverse((latitude, longitude)).raw["address"]
+    print(location)
+    # Using so, many or statements to handle fallbacks as the return of geolocator is inconsistent and sometime may not have some keys.
+    city = location.get("city") or location.get("town") or location.get("village") or location.get("municipality")
+    suburb = location.get("suburb") or location.get("neighbourhood") or location.get("hamlet") or location.get("county")
+    state = location.get("state") or location.get("state_district")
 
     # Currently haven't added the ai tags as the models are not trained yet.
     try:
-        report_url = upload_file(file)
-        await report_collection.insert_one({"user_id": user_id, "report_id": report_id, "location": location, "timestamp": time, "report_url": report_url})
+        report_url = await upload_file(file)
+        await report_collection.insert_one({"user_id": user_id, "report_id": report_id,
+                                            "location": {
+                                                         "latitude": float(latitude),
+                                                         "longitude": float(longitude),
+                                                         "state": state,
+                                                         "city": city,
+                                                         "suburb": suburb
+                                                         },
+                                            "timestamp": time, "report_url": report_url})
         return {"Status": "Successful"}
     except Exception as e:
-        raise HTTPException(status_code = 304, detail = str(e))
-
-@app.post("/{user_id}/{report_id}")
-async def get_report(user_id, report_id):   # Currently it supports only image reports submitted by the citizen.
-    """
-    API endpoint to get the uploaded image report.
-    :param user_id: The unique id of the user
-    :param report_id: The unique id of the report.
-    :return: JSON
-    """
-    role_check = await user_collection.find_one({"user_id": user_id})
-    report_data = await report_collection.find_one({"report_id": report_id})
-    if role_check["role"] == "official":
-        try:
-            url = report_data["report_url"]
-            r = requests.get(url, stream = True)
-            return Response(content = r.content, media_type = "image/jpeg")
-        except Exception as e:
-            return {"ERROR": str(e)}
-
-    else:
-        raise HTTPException(status_code = 401, detail = "Unauthorized User, Data can be accessed only by officials.")
+        raise HTTPException(status_code = 500, detail = str(e))
 
 @app.post("/{user_id}/{report_id}/details")
 async def get_report_details(user_id, report_id):     # Currently ai models are not trained so, only these details provided, later multiple more details regarding
@@ -167,17 +167,36 @@ async def get_report_details(user_id, report_id):     # Currently ai models are 
     """
     role_check = await user_collection.find_one({"user_id": user_id})
     report_data = await report_collection.find_one({"report_id": report_id})
-    if role_check["role"] == "official":
-        try:
-            ai_tags = report_data["ai_tags"]
-            urgency_level = ai_tags["urgency"]
-            calamity_type = ai_tags["classification"]
-            return {"urgency_level": urgency_level, "calamity_type": calamity_type}
-        except Exception as e:
-            return {"ERROR": str(e)}
+    if role_check:
+        if role_check["role"] == "official":
+            try:
+                ai_tags = report_data["ai_tags"]
+                urgency_level = ai_tags["urgency"]
+                calamity_type = ai_tags["classification"]
+                url = report_data["report_url"]
+                return {"urgency_level": urgency_level, "calamity_type": calamity_type, "report_url": url}
+            except Exception as e:
+                return {"ERROR": str(e)}
 
+        else:
+            raise HTTPException(status_code = 401, detail = "Unauthorized User, Data can be accessed only by officials.")
     else:
-        raise HTTPException(status_code = 401, detail = "Unauthorized User, Data can be accessed only by officials.")
+        raise HTTPException(status_code = 500, detail = "No report with specified credentials found.")
+
+@app.post("/list_reports/{user_id}")
+async def list_reports_by_user_id(user_id):
+    """
+    API endpoint to get all the reports posted by a particular user_id
+    :param user_id: The unique id of the user
+    :return: Details about the user reports
+    """
+    all_reports = await report_collection.find({"user_id": user_id})
+    reports_list = all_reports.to_list()
+    if reports_list:
+        return {"reports_list": reports_list}
+    else:
+        raise HTTPException(status_code = 400, detail = "No reports submitted yet.")
+
 
 if __name__ == "__main__":
     uvicorn.run(app = app, port = 8001)

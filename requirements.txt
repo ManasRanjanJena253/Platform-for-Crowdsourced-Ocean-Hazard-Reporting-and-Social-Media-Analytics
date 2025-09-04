@@ -7,5 +7,7 @@ passlib~=1.7.4
 dotenv~=0.9.9
 python-dotenv~=1.1.1
 python-multipart
-uvicorn
-cloudinary
+uvicorn~=0.35.0
+cloudinary~=1.44.1
+requests~=2.32.5
+geopy~=2.4.1

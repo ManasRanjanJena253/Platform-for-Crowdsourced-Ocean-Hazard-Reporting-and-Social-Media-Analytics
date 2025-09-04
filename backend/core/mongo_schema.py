@@ -54,7 +54,10 @@ reports_validation = {
                  "required": ["latitude", "longitude"],
                  "properties": {
                      "latitude": {"bsonType": "double"},
-                     "longitude": {"bsonType": "double"}
+                     "longitude": {"bsonType": "double"},
+                     "state": {"bsonType": "string"},
+                     "city": {"bsonType": "string"},
+                     "suburb": {"bsonType": "string"}
                  }
              },
              "timestamp": {
