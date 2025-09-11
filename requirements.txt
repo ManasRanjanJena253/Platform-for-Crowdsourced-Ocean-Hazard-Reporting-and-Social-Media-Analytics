@@ -11,3 +11,8 @@ uvicorn~=0.35.0
 cloudinary~=1.44.1
 requests~=2.32.5
 geopy~=2.4.1
+gretel-client
+nltk
+xgboost
+lightgbm
+gensim

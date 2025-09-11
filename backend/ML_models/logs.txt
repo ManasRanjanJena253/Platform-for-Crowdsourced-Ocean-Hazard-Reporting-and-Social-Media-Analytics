@@ -1,0 +1,14 @@
+Train mean squarred error of XGBRegressor : 72.2000795222997 | Train mean absolute error of XGBRegressor : 6.181475705486536
+Test mean squarred error of XGBRegressor : 140.2431237897859 | Test mean absolute error of XGBRegressor : 8.82117743215561
+
+Train mean squarred error of LGBMRegressor : 102.73195012153336 | Train mean absolute error of LGBMRegressor : 7.698452423315492
+Test mean squarred error of LGBMRegressor : 138.31371573746551 | Test mean absolute error of LGBMRegressor : 8.757570861572644
+
+Train mean squarred error of RandomForestRegressor : 65.88166966188187 | Train mean absolute error of RandomForestRegressor : 5.681517026984856
+Test mean squarred error of RandomForestRegressor : 139.49514768802442 | Test mean absolute error of RandomForestRegressor : 8.70397691029681
+
+Train mean squarred error of LinearRegression : 312.5943535169596 | Train mean absolute error of LinearRegression : 14.064767541833113
+Test mean squarred error of LinearRegression : 319.26268768827225 | Test mean absolute error of LinearRegression : 14.141563551771705
+
+Train mean squarred error of XGBRegressor with l2 penalty : 75.32564980660251 | Train mean absolute error of XGBRegressor with l2 penalty : 6.338489144811033
+Test mean squarred error of XGBRegressor with l2 penalty : 139.90821376235107 | Test mean absolute error of XGBRegressor with l2 penalty : 8.772688259190321

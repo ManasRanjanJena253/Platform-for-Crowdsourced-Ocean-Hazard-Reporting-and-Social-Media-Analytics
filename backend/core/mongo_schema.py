@@ -80,7 +80,7 @@ reports_validation = {
              },
              "source": {
                  "bsonType": "string",
-                 "description": "The source used for acquiring the data i.e. Citizen or Social Media"
+                 "description": "The source used for acquiring the data i.e. 'citizen' or 'social' "
              }
          }}
 }
