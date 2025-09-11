@@ -52,7 +52,7 @@ def augment_data(input_df, target_count = 15000):
     final_df.to_csv("Augmented_data.csv", index = False)
     return final_df.sample(n=target_count, random_state=101).reset_index(drop=True)
 
-# augment_data(input_df = df, target_count = 20000)
+augment_data(input_df = df, target_count = 20000)
 
 aug_df = pd.read_csv("data/Augmented_data.csv")
 fasttext = api.load("glove-twitter-25")  # Using a smaller model to handle during deployment.
@@ -70,18 +70,18 @@ def sentence_embeddings(text):
         return np.zeros(25)
     return np.mean(vectors, axis = 0)
 
-# aug_df["vector_embeddings"] = aug_df["conversation"].apply(lambda x: sentence_embeddings(x))
+aug_df["vector_embeddings"] = aug_df["conversation"].apply(lambda x: sentence_embeddings(x))
 
-# embeddings = np.vstack(aug_df["vector_embeddings"].values)
-#
-# # Creating separate columns for each vector element
-# embedding_df = pd.DataFrame(embeddings,
-#                             columns = [f"emb_{i}" for i in range(embeddings.shape[1])])
-# preprocessed_df = pd.concat([aug_df.drop(columns = ["vector_embeddings"]), embedding_df], axis = 1)
-#
-# preprocessed_df.to_csv("Embedded_dataset.csv", index = False)
-#
-# fasttext.save("glove_model.kv")  # Saving the fasttext model.
+embeddings = np.vstack(aug_df["vector_embeddings"].values)
+
+# Creating separate columns for each vector element
+embedding_df = pd.DataFrame(embeddings,
+                            columns = [f"emb_{i}" for i in range(embeddings.shape[1])])
+preprocessed_df = pd.concat([aug_df.drop(columns = ["vector_embeddings"]), embedding_df], axis = 1)
+
+preprocessed_df.to_csv("Embedded_dataset.csv", index = False)
+
+fasttext.save("glove_model.kv")  # Saving the fasttext model.
 
 embedded_df = pd.read_csv("data/Embedded_dataset.csv")
 
