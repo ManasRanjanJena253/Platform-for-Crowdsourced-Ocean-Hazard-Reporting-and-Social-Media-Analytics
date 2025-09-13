@@ -1,6 +1,6 @@
 fastapi~=0.116.1
 motor~=3.7.1
-scikit-learn
+scikit-learn~=1.7.1
 asyncio~=4.0.0
 firebase-admin~=7.1.0
 passlib~=1.7.4
@@ -12,7 +12,11 @@ cloudinary~=1.44.1
 requests~=2.32.5
 geopy~=2.4.1
 gretel-client
-nltk
-xgboost
-lightgbm
-gensim
+nltk~=3.9.1
+xgboost~=3.0.5
+lightgbm~=4.6.0
+gensim~=4.3.3
+pandas~=2.3.2
+tqdm~=4.67.1
+numpy~=1.26.4
+nlpaug~=1.1.11
