@@ -1,5 +1,5 @@
 import os
-from datetime import datetime, UTC
+from datetime import datetime, UTC, timezone, timedelta
 import requests
 from fastapi import FastAPI, Form, UploadFile, Request, Response, File
 from fastapi.middleware.cors import CORSMiddleware
@@ -196,6 +196,74 @@ async def list_reports_by_user_id(user_id):
         return {"reports_list": reports_list}
     else:
         raise HTTPException(status_code = 400, detail = "No reports submitted yet.")
+
+def get_tweets(latitude, longitude, radius, days = 0, hours = 0, minutes = 30, time_limit = True):
+    """
+    Function to get the recent tweets
+    :param latitude: Latitude of the place you want to retrieve
+    :param longitude: Longitude of the place you want to retrieve from.
+    :param radius: The radius surrounding the latitude and longitude to retrieve tweets from.
+    :param time_limit: Choice if we want the tweets to be constraint by time.
+    :param minutes: The time window of which we want tweets from.
+    :param hours: The hour window we want tweets from.
+    :param days: The day windos we want tweets from.
+    :return: JSON format of details about the tweets.
+    """
+    url = "https://api.twitter.com/2/tweets/search/recent"
+
+    bearer_token = os.getenv("BEARER_TOKEN")
+    hazard_keywords = "tsunami OR flood OR cyclone OR storm OR surge OR बारिश OR बाढ़ OR తుఫాను OR वादळ"
+
+    query = f"({hazard_keywords}) point_radius:[{longitude} {latitude} {radius}km] -is:retweet"
+    if time_limit:
+        start_time = (datetime.now(timezone.utc) - timedelta(minutes = minutes, days = days, hours = hours)).isoformat()
+
+    url = "https://api.twitter.com/2/tweets/search/recent"
+
+    if time_limit:
+        params = {
+            "query": query,
+            "max_results": 10,  # its value can be 10 to 100.
+            "tweet.fields": "id,text,created_at,lang,geo",
+            "expansions": "geo.place_id",
+            "place.fields": "full_name,country,geo",
+            "start_time": start_time   # To fetch tweets from a given time window.
+        }
+
+    else:
+        params = {
+            "query": query,
+            "max_results": 10,  # its value can be 10 to 100.
+            "tweet.fields": "id,text,created_at,lang,geo",
+            "expansions": "geo.place_id",
+            "place.fields": "full_name,country,geo",
+        }
+
+    headers = {
+        "Authorization": f"Bearer {bearer_token}"
+    }
+
+    response = requests.get(url, headers = headers, params = params)
+
+    if response.status_code == 200:
+        data = response.json()
+
+        tweet_time = []
+        tweet_language = []
+        tweet_text = []
+
+        for tweet in data.get("data", []):
+            tweet_time.append(tweet["created_at"])
+            tweet_language.append(tweet["lang"])
+            tweet_text.append(tweet["text"])
+
+        return {
+            "created_at": tweet_time,
+            "tweet_language": tweet_language,
+            "tweets": tweet_text
+                }
+    else:
+        return {"ERROR": response.text}
 
 
 if __name__ == "__main__":
