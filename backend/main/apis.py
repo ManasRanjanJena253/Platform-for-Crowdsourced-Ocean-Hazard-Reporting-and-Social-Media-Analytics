@@ -1,4 +1,5 @@
 import os
+import pickle
 from datetime import datetime, UTC, timezone, timedelta
 import requests
 from fastapi import FastAPI, Form, UploadFile, Request, Response, File
@@ -11,9 +12,8 @@ from passlib.hash import bcrypt
 import uuid
 from dotenv import load_dotenv
 import uvicorn
-import tempfile
-import shutil
 from geopy.geocoders import Nominatim
+from helper_func import upload_file, authorize_user, generate_uuid, generate_report_id
 
 load_dotenv()
 app = FastAPI()
@@ -31,88 +31,41 @@ cloudinary.config(
     api_secret = os.getenv("CLOUDINARY_API_SECRET")
 )
 
-async def upload_file(file: UploadFile, folder: str = "hazard_reports_by_user"):
-    """
-    Uploads a file (from FastAPI UploadFile) to Cloudinary and returns its secure URL.
-    """
-    try:
-        # Save the uploaded file temporarily
-        with tempfile.NamedTemporaryFile(delete = False) as tmp:
-            shutil.copyfileobj(file.file, tmp)
-            tmp_path = tmp.name
-
-        # Upload to Cloudinary
-        result = cloudinary.uploader.upload(
-            tmp_path,
-            folder = folder,
-            resource_type = "auto"  # auto-detects image/video/pdf
-        )
-        return result["secure_url"]
-
-    except Exception as e:
-        print(f"Cloudinary upload failed: {e}")
-        return None
-
-
-async def authorize_user(user_name: str, password):
-    """
-    Function to authorize the user
-    :param user_name: The name of the user
-    :param password: The password of the user
-    :return: Boolean, whether the credentials match or not.
-    """
-    user = await user_collection.find_one({"user_name": user_name}, {"_id": 0, "user_id": 1, "hashed_pwd": 1})
-    if user and bcrypt.verify(password, user["hashed_pwd"]):
-        return user["user_id"]
-    return False
-
-async def generate_uuid():
-
-    user_id = uuid.uuid4()
-    uuid_check = await user_collection.find_one({"user_id": str(user_id)})
-
-    if uuid_check:
-        while uuid_check:
-            user_id = uuid.uuid4()
-            uuid_check = await user_collection.find_one({"user_id": str(user_id)})
-
-        return str(user_id)
-
-    else:
-        return str(user_id)
-
-async def generate_report_id():
-
-    report_id = uuid.uuid4()
-    uuid_check = await report_collection.find_one({"report_id": str(report_id)})
-
-    if uuid_check:
-        while uuid_check:
-            report_id = uuid.uuid4()
-            uuid_check = await report_collection.find_one({"report_id": str(report_id)})
-
-        return str(report_id)
-
-    else:
-        return str(report_id)
-
-
 @app.post("/sign_in")
-async def sign_in(user_name: str = Form(...), password: str = Form(...), role: str = Form(...)):
+async def sign_in(user_name: str = Form(...), password: str = Form(...), role: str = Form(...), official_pwd: str = Form(None)):
     """
     API endpoint for a new user to sign in.
     :param user_name: The name of the user
     :param password: The password of the user
     :param role: The role of the user i.e. either official or citizen
+    :param official_pwd: Extra password required only if the role is 'official'
     :return: Confirmation
     """
     hashed_pwd = bcrypt.hash(password)
     user_id = await generate_uuid()
+
+    # Check if username already exists
+    existing_user = await user_collection.find_one({"user_name": user_name})
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Username already exists.")
+
+    # If role is official, verify official password
+    if role.lower() == "official":
+        env_official_pwd = os.getenv("OFFICIAL_PWD")
+        if not official_pwd or official_pwd != env_official_pwd:
+            raise HTTPException(status_code=403, detail="Invalid official password. Unauthorized to register as official.")
+
     try:
-        await user_collection.insert_one({"user_name": user_name, "user_id": user_id, "hashed_pwd": hashed_pwd, "role": role.lower()})
-        return {"Status": "Successful", "user_id": user_id}
+        await user_collection.insert_one({
+            "user_name": user_name,
+            "user_id": user_id,
+            "hashed_pwd": hashed_pwd,
+            "role": role.lower()
+        })
+        return {"Status": "Successful", "user_id": user_id, "role": role.lower()}
     except Exception as e:
-        raise HTTPException(status_code = 400, detail = str(e))
+        raise HTTPException(status_code=400, detail=str(e))
+
 
 @app.post("/login")
 async def login(user_name: str = Form(...), password: str = Form(...)):
@@ -129,32 +82,58 @@ async def login(user_name: str = Form(...), password: str = Form(...)):
         raise HTTPException(status_code = 400, detail = "Invalid Credentials")
 
 @app.post("/{user_id}/upload_report")
-async def upload_report(user_id, latitude, longitude, file: UploadFile = File(...)):
+async def upload_report(user_id, latitude: float, longitude: float, file: UploadFile = File(...)):
+    """
+    API endpoint for uploading a new hazard report by a user.
+    :param user_id: The ID of the user submitting the report
+    :param latitude: Latitude of the location
+    :param longitude: Longitude of the location
+    :param file: Uploaded media file
+    :return: Status message
+    """
     report_id = await generate_report_id()
     time = datetime.now(UTC)
-    geolocator = Nominatim(user_agent="geoapi")      # Used to get the area name where the latitude and longitude lies.
+    geolocator = Nominatim(user_agent="geoapi")  # Used to get the area name where the latitude and longitude lies.
     location = geolocator.reverse((latitude, longitude)).raw["address"]
-    print(location)
-    # Using so, many or statements to handle fallbacks as the return of geolocator is inconsistent and sometime may not have some keys.
+
+    # Using so many fallbacks because geopy is inconsistent sometimes.
     city = location.get("city") or location.get("town") or location.get("village") or location.get("municipality")
     suburb = location.get("suburb") or location.get("neighbourhood") or location.get("hamlet") or location.get("county")
     state = location.get("state") or location.get("state_district")
 
-    # Currently haven't added the ai tags as the models are not trained yet.
     try:
         report_url = await upload_file(file)
-        await report_collection.insert_one({"user_id": user_id, "report_id": report_id,
-                                            "location": {
-                                                         "latitude": float(latitude),
-                                                         "longitude": float(longitude),
-                                                         "state": state,
-                                                         "city": city,
-                                                         "suburb": suburb
-                                                         },
-                                            "timestamp": time, "report_url": report_url})
-        return {"Status": "Successful"}
+
+        # --------- AI MODEL PLACEHOLDER ----------
+        # Replace the following stub with your actual AI tagging
+        ai_tags = {
+            "classification": "Other",   # e.g. "Flood", "Tsunami" etc.
+            "urgency": "low"             # e.g. "low", "medium", "high"
+        }
+        # ai_tags = await run_ai_tagging_model(report_url, ...)  # <--- your model hook
+        # ----------------------------------------
+
+        await report_collection.insert_one({
+            "user_id": user_id,
+            "report_id": report_id,
+            "location": {
+                "latitude": float(latitude),
+                "longitude": float(longitude),
+                "state": state,
+                "city": city,
+                "suburb": suburb
+            },
+            "timestamp": time,
+            "report_url": report_url,
+            "ai_tags": ai_tags,
+            "source": "citizen",           # important: required by schema
+            "created_stream": False,       # default, updated only when streaming starts
+            "stream_details": {}           # placeholder, updated only for officials' streams
+        })
+
+        return {"Status": "Successful", "report_id": report_id}
     except Exception as e:
-        raise HTTPException(status_code = 500, detail = str(e))
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/{user_id}/{report_id}/details")
 async def get_report_details(user_id, report_id):     # Currently ai models are not trained so, only these details provided, later multiple more details regarding
@@ -190,81 +169,268 @@ async def list_reports_by_user_id(user_id):
     :param user_id: The unique id of the user
     :return: Details about the user reports
     """
-    all_reports = await report_collection.find({"user_id": user_id})
-    reports_list = all_reports.to_list()
-    if reports_list:
-        return {"reports_list": reports_list}
-    else:
-        raise HTTPException(status_code = 400, detail = "No reports submitted yet.")
+    try:
+        all_reports = report_collection.find({"user_id": user_id})
+        reports_list = await all_reports.to_list(length=1000)   # Added await + length cap
+        if reports_list:
+            return {"reports_list": reports_list}
+        else:
+            return {"reports_list": []}   # returning empty list instead of error
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-def get_tweets(latitude, longitude, radius, days = 0, hours = 0, minutes = 30, time_limit = True):
-    """
-    Function to get the recent tweets
-    :param latitude: Latitude of the place you want to retrieve
-    :param longitude: Longitude of the place you want to retrieve from.
-    :param radius: The radius surrounding the latitude and longitude to retrieve tweets from.
-    :param time_limit: Choice if we want the tweets to be constraint by time.
-    :param minutes: The time window of which we want tweets from.
-    :param hours: The hour window we want tweets from.
-    :param days: The day windos we want tweets from.
-    :return: JSON format of details about the tweets.
-    """
-    url = "https://api.twitter.com/2/tweets/search/recent"
 
+@app.post("/get_tweet_data")
+async def get_tweets(latitude: float, longitude: float, radius: int,
+                     days: int = 0, hours: int = 0, minutes: int = 30, time_limit: bool = True):
+    """
+    Function to get the recent tweets (Citizen Mode - on-demand fetch)
+    """
     bearer_token = os.getenv("BEARER_TOKEN")
     hazard_keywords = "tsunami OR flood OR cyclone OR storm OR surge OR बारिश OR बाढ़ OR తుఫాను OR वादळ"
 
     query = f"({hazard_keywords}) point_radius:[{longitude} {latitude} {radius}km] -is:retweet"
     if time_limit:
-        start_time = (datetime.now(timezone.utc) - timedelta(minutes = minutes, days = days, hours = hours)).isoformat()
+        start_time = (datetime.now(timezone.utc) - timedelta(minutes=minutes, days=days, hours=hours)).isoformat()
 
     url = "https://api.twitter.com/2/tweets/search/recent"
 
-    if time_limit:
-        params = {
-            "query": query,
-            "max_results": 10,  # its value can be 10 to 100.
-            "tweet.fields": "id,text,created_at,lang,geo",
-            "expansions": "geo.place_id",
-            "place.fields": "full_name,country,geo",
-            "start_time": start_time   # To fetch tweets from a given time window.
-        }
-
-    else:
-        params = {
-            "query": query,
-            "max_results": 10,  # its value can be 10 to 100.
-            "tweet.fields": "id,text,created_at,lang,geo",
-            "expansions": "geo.place_id",
-            "place.fields": "full_name,country,geo",
-        }
-
-    headers = {
-        "Authorization": f"Bearer {bearer_token}"
+    params = {
+        "query": query,
+        "max_results": 50,
+        "tweet.fields": "id,text,created_at,lang,geo",
+        "expansions": "geo.place_id",
+        "place.fields": "full_name,country,geo",
     }
+    if time_limit:
+        params["start_time"] = start_time
 
-    response = requests.get(url, headers = headers, params = params)
+    headers = {"Authorization": f"Bearer {bearer_token}"}
+    response = requests.get(url, headers=headers, params=params)
 
     if response.status_code == 200:
-        data = response.json()
-
-        tweet_time = []
-        tweet_language = []
-        tweet_text = []
-
-        for tweet in data.get("data", []):
-            tweet_time.append(tweet["created_at"])
-            tweet_language.append(tweet["lang"])
-            tweet_text.append(tweet["text"])
-
-        return {
-            "created_at": tweet_time,
-            "tweet_language": tweet_language,
-            "tweets": tweet_text
+        try:
+            data = response.json()
+            tweets_out = []
+            for tweet in data.get("data", []):
+                tweet_doc = {
+                    "tweet_id": tweet["id"],
+                    "created_at": tweet["created_at"],
+                    "lang": tweet.get("lang"),
+                    "text": tweet.get("text"),
+                    # "ai_tags": run_panic_meter(tweet["text"])  # <-- add ML tagging here
                 }
-    else:
-        return {"ERROR": response.text}
+                tweets_out.append(tweet_doc)
 
+            return {"tweets": tweets_out}
+        except Exception as e:
+            raise HTTPException(status_code=501, detail=str(e))
+    else:
+        raise HTTPException(status_code=501, detail="Unable to fetch twitter data.")
+
+@app.post("/{official_id}/start_stream")
+async def start_twitter_stream(official_id: str, duration_minutes: int = 30):
+    """
+    API endpoint to start streaming twitter data (Official Mode).
+    Marks a stream session as active in the DB.
+    Only allowed for registered officials.
+    """
+    # Verify official exists in DB
+    official = await user_collection.find_one({"user_id": official_id})
+    if not official:
+        raise HTTPException(status_code=404, detail="User not found.")
+    if official.get("role") != "official":
+        raise HTTPException(status_code=403, detail="Only officials are authorized to start streams.")
+
+    # Check if another stream is already active
+    existing_stream = await report_collection.find_one({"created_stream": True})
+    if existing_stream:
+        raise HTTPException(status_code=400, detail="Another stream is already active.")
+
+    start_time = datetime.now(UTC)
+    end_time = start_time + timedelta(minutes=duration_minutes)
+
+    try:
+        await report_collection.insert_one({
+            "user_id": official_id,
+            "report_id": f"stream-{uuid.uuid4()}",
+            "location": {"latitude": 0, "longitude": 0},  # not relevant for stream doc
+            "timestamp": start_time,
+            "report_url": "",
+            "ai_tags": {"classification": "Other", "urgency": "low"},
+            "source": "social",
+            "created_stream": True,
+            "stream_details": {
+                "official_id": official_id,
+                "start_time": start_time,
+                "end_time": end_time
+            }
+        })
+        return {"Status": "Stream Started", "start_time": start_time, "end_time": end_time}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/stream_status")
+async def get_stream_status():
+    """
+    API endpoint to check if a twitter stream is currently active.
+    """
+    active_stream = await report_collection.find_one({"created_stream": True})
+    if active_stream:
+        return {"active": True, "details": active_stream.get("stream_details")}
+    else:
+        return {"active": False}
+
+@app.post("/{official_id}/stop_stream")
+async def stop_twitter_stream(official_id: str):
+    """
+    API endpoint to stop the active twitter stream (Official Mode).
+    Only the official who started the stream can stop it.
+    """
+    # Verify official exists in DB
+    official = await user_collection.find_one({"user_id": official_id})
+    if not official:
+        raise HTTPException(status_code=404, detail="User not found.")
+    if official.get("role") != "official":
+        raise HTTPException(status_code=403, detail="Only officials are authorized to stop streams.")
+
+    # Find active stream
+    active_stream = await report_collection.find_one({"created_stream": True})
+    if not active_stream:
+        raise HTTPException(status_code=400, detail="No active stream found.")
+
+    # Check if the same official started it
+    stream_details = active_stream.get("stream_details", {})
+    if stream_details.get("official_id") != official_id:
+        raise HTTPException(status_code=403, detail="Only the official who started the stream can stop it.")
+
+    try:
+        await report_collection.update_one(
+            {"_id": active_stream["_id"]},
+            {"$set": {"created_stream": False, "stream_details": {}}}
+        )
+        return {"Status": "Stream Stopped"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/list_social_reports/{official_id}")
+async def list_social_reports(official_id: str, limit: int = 100):
+    """
+    API endpoint to list reports ingested from Twitter (source = 'social').
+    Accessible only to officials.
+    :param official_id: The unique id of the official
+    :param limit: Max number of reports to return
+    :return: List of social reports
+    """
+    # Verify official exists in DB
+    official = await user_collection.find_one({"user_id": official_id})
+    if not official:
+        raise HTTPException(status_code=404, detail="User not found.")
+    if official.get("role") != "official":
+        raise HTTPException(status_code=403, detail="Only officials are authorized to view social reports.")
+
+    try:
+        cursor = report_collection.find({"source": "social"}).sort("timestamp", -1).limit(limit)
+        reports_list = await cursor.to_list(length=limit)
+        return {"social_reports": reports_list}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/list_citizen_reports/{user_id}")
+async def list_citizen_reports(user_id: str, limit: int = 100):
+    """
+    API endpoint to list all reports submitted by a citizen (source = 'citizen').
+    :param user_id: The unique id of the citizen
+    :param limit: Max number of reports to return
+    :return: List of citizen reports
+    """
+    # Verify user exists in DB
+    user = await user_collection.find_one({"user_id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found.")
+    if user.get("role") != "citizen":
+        raise HTTPException(status_code=403, detail="Only citizens can access their own reports.")
+
+    try:
+        cursor = report_collection.find({"user_id": user_id, "source": "citizen"}).sort("timestamp", -1).limit(limit)
+        reports_list = await cursor.to_list(length=limit)
+        return {"citizen_reports": reports_list}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/{official_id}/hotspots/run_clustering")
+async def run_hotspot_clustering(official_id: str, eps_km: float = 5.0, min_samples: int = 3):
+    """
+    API endpoint to run DBSCAN clustering on reports and generate hotspots.
+    Only officials are allowed.
+    :param official_id: The id of the official starting clustering
+    :param eps_km: Radius in km for clustering
+    :param min_samples: Minimum number of reports to form a cluster
+    :return: Number of hotspots created
+    """
+    # Verify official
+    official = await user_collection.find_one({"user_id": official_id})
+    if not official:
+        raise HTTPException(status_code=404, detail="User not found.")
+    if official.get("role") != "official":
+        raise HTTPException(status_code=403, detail="Only officials are authorized to run clustering.")
+
+    try:
+        pass
+        # hotspots = await run_dbscan_and_store(eps_km=eps_km, min_samples=min_samples)
+        # return {"Status": "Clustering complete", "hotspots_created": len(hotspots)}     These will be added later after the training of dbscan models.
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/hotspots/list")
+async def list_hotspots(min_urgency: float = None, limit: int = 100):
+    """
+    API endpoint to list hotspots detected in the system.
+    :param min_urgency: Filter to only show hotspots above this urgency
+    :param limit: Max number of hotspots to return
+    :return: List of hotspots
+    """
+    try:
+        query = {}
+        if min_urgency is not None:
+            query["urgency_level"] = {"$gte": float(min_urgency)}
+
+        cursor = hotspot_collection.find(query).sort("urgency_level", -1).limit(limit)
+        hotspots = await cursor.to_list(length=limit)
+        return {"hotspots": hotspots}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/hotspots/{official_id}/{hotspot_id}/details")
+async def hotspot_details(official_id: str, hotspot_id: str):
+    """
+    API endpoint to fetch details of a specific hotspot.
+    Only officials are allowed.
+    :param official_id: The id of the official
+    :param hotspot_id: The id of the hotspot
+    :return: Hotspot details including report_ids
+    """
+    # Verify official
+    official = await user_collection.find_one({"user_id": official_id})
+    if not official:
+        raise HTTPException(status_code=404, detail="User not found.")
+    if official.get("role") != "official":
+        raise HTTPException(status_code=403, detail="Only officials are authorized to access hotspot details.")
+
+    try:
+        hotspot = await hotspot_collection.find_one({"hotspot_id": hotspot_id})
+        if not hotspot:
+            raise HTTPException(status_code=404, detail="Hotspot not found.")
+        return {"hotspot": hotspot}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/reports/list_all")   # For frontend engineers only, so, they can fetch all the details without the need of user login.
+async def list_all_reports(limit: int = 500):
+    cursor = report_collection.find({}).sort("timestamp", -1).limit(limit)
+    reports = await cursor.to_list(length=limit)
+    return {"reports": reports}
 
 if __name__ == "__main__":
     uvicorn.run(app = app, port = 8001)

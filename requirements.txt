@@ -20,3 +20,4 @@ pandas~=2.3.2
 tqdm~=4.67.1
 numpy~=1.26.4
 nlpaug~=1.1.11
+openpyxl

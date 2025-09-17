@@ -20,7 +20,7 @@ class FloodPanicDataset(Dataset):
         self.transform = transform
 
         # Keeping only the images which are assigned a panic meter.
-        self.data = self.data[self.data["fileName"].apply(
+        self.data = self.data[self.data["img_name"].apply(
             lambda x: os.path.exists(os.path.join(img_dir, x))
         )].reset_index(drop = True)
 
@@ -32,7 +32,14 @@ class FloodPanicDataset(Dataset):
         img_path = os.path.join(self.img_dir, img_name)
         image = Image.open(img_path).convert("RGB")
 
-        panic_value = torch.tensor(self.data.iloc[idx, 1], dtype = torch.float32)
+        panic_value_str = self.data.iloc[idx, 1]
+        if panic_value_str == "High":
+            panic_value_int = 2
+        elif panic_value_str == "Low":
+            panic_value_int = 1
+        else:
+            panic_value_int = 0
+        panic_value = torch.tensor(panic_value_int, dtype = torch.long)
 
         if self.transform:
             image = self.transform(image)
@@ -41,7 +48,7 @@ class FloodPanicDataset(Dataset):
 
 # Preparing the dataset
 train_transform = transforms.Compose([
-    transforms.Resize((224, 224)),
+    transforms.Resize((256, 256)),
     transforms.RandomHorizontalFlip(),
     transforms.ColorJitter(brightness = 0.2, contrast = 0.2),
     transforms.TrivialAugmentWide(num_magnitude_bins = 15),
@@ -50,22 +57,15 @@ train_transform = transforms.Compose([
                          std=[0.229, 0.224, 0.225])
 ])
 
-dataset = FloodPanicDataset(csv_file = "data/panic_meter.csv", img_dir = "data/flood", transform = train_transform)
+dataset = FloodPanicDataset(csv_file="data/img_panic_level.csv", img_dir="data/flood", transform=train_transform)
 
-idx = random.randrange(1, 100, 1)
-img, panic_value = dataset[idx]
-img = img.permute(1, 2, 0).numpy()
-plt.title(f"Idx : {idx}, Panic Value : {panic_value}")
-plt.imshow(img)
-plt.show()
-
-print(len(dataset))
+print("Total images in dataset : ", len(dataset))
 
 train_idx, val_idx = train_test_split(range(len(dataset)), test_size = 0.2, random_state = 21)
 train_subset = torch.utils.data.Subset(dataset, train_idx)
 val_subset = torch.utils.data.Subset(dataset, val_idx)
 
-BATCH_SIZE = 8
+BATCH_SIZE = 64
 train_loader = DataLoader(train_subset, batch_size = BATCH_SIZE, shuffle = True)
 val_loader = DataLoader(val_subset, batch_size = BATCH_SIZE, shuffle = False)
 
@@ -75,21 +75,21 @@ print(device)
 
 # model = models.resnet18(pretrained = True)
 # model.fc = nn.Linear(model.fc.in_features, 1)   # regression head
-model = PanicMeterModel(img_size = 224)
+model = PanicMeterModel(img_size = 256)
 model = model.to(device)
 
-criterion = nn.MSELoss()
-optimizer = torch.optim.Adam(model.parameters(), lr = 5e-4, weight_decay = 1e-4)
+criterion = nn.CrossEntropyLoss()
+optimizer = torch.optim.Adam(model.parameters(), lr = 1e-4)
 
 
-num_epochs = 300
+num_epochs = 500
 
 for epoch in tqdm(range(num_epochs)):
     # Training
     model.train()
     train_loss = 0
     for imgs, labels in train_loader:
-        imgs, labels = imgs.to(device), labels.to(device).unsqueeze(1)
+        imgs, labels = imgs.to(device), labels.to(device)
 
         optimizer.zero_grad()
         outputs = model(imgs)
@@ -103,15 +103,15 @@ for epoch in tqdm(range(num_epochs)):
     val_loss = 0
     with torch.no_grad():
         for imgs, labels in val_loader:
-            imgs, labels = imgs.to(device), labels.to(device).unsqueeze(1)
+            imgs, labels = imgs.to(device), labels.to(device)
             outputs = model(imgs)
             loss = criterion(outputs, labels)
             val_loss += loss.item()
-    if epoch % 20 == 0 or epoch + 1 == num_epochs:
+    if epoch % 50 == 0 or epoch + 1 == num_epochs:
         print(f"Epoch [{epoch+1}/{num_epochs}] "
               f"Train Loss: {train_loss/len(train_loader):.4f} "
               f"Val Loss: {val_loss/len(val_loader):.4f}")
 
 # Saving the model
-torch.save(model.state_dict(), "models/panic_meter_custom_model.pth")
+torch.save(model.state_dict(), "models/panic_level_custom_model.pth")
 print("Model saved successfully.")

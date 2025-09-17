@@ -1,3 +1,6 @@
+
+                                          Accuracy on embeddings generate using Gensim Glove-25 model
+
 Train mean squarred error of XGBRegressor : 72.2000795222997 | Train mean absolute error of XGBRegressor : 6.181475705486536
 Test mean squarred error of XGBRegressor : 140.2431237897859 | Test mean absolute error of XGBRegressor : 8.82117743215561
 
@@ -7,8 +10,17 @@ Test mean squarred error of LGBMRegressor : 138.31371573746551 | Test mean absol
 Train mean squarred error of RandomForestRegressor : 65.88166966188187 | Train mean absolute error of RandomForestRegressor : 5.681517026984856
 Test mean squarred error of RandomForestRegressor : 139.49514768802442 | Test mean absolute error of RandomForestRegressor : 8.70397691029681
 
-Train mean squarred error of LinearRegression : 312.5943535169596 | Train mean absolute error of LinearRegression : 14.064767541833113
-Test mean squarred error of LinearRegression : 319.26268768827225 | Test mean absolute error of LinearRegression : 14.141563551771705
 
-Train mean squarred error of XGBRegressor with l2 penalty : 75.32564980660251 | Train mean absolute error of XGBRegressor with l2 penalty : 6.338489144811033
-Test mean squarred error of XGBRegressor with l2 penalty : 139.90821376235107 | Test mean absolute error of XGBRegressor with l2 penalty : 8.772688259190321
+                                         Accuracy on embeddings generated using Tf-IDF with n-grams and SVD
+
+Train mean squared error of XGBRegressor : 51.41281228469797 | Train mean absolute error : 4.795758273691932
+Test mean squared error of XGBRegressor : 130.94601852594744 | Test mean absolute error : 8.56546673062245
+
+Train mean squared error of LGBMRegressor : 71.30053601646992 | Train mean absolute error : 6.368357870646617
+Test mean squared error of LGBMRegressor : 117.82038541702472 | Test mean absolute error : 8.185399289506542
+
+Train mean squared error of RandomForestRegressor : 55.40771349247424 | Train mean absolute error : 5.19887405678429
+Test mean squared error of RandomForestRegressor : 122.62601215875036 | Test mean absolute error : 8.309251345404316
+
+Train mean squared error of StackingRegressor : 100.63194496924366 | Train mean absolute error : 7.599035904612606
+Test mean squared error of StackingRegressor : 127.0943234407121 | Test mean absolute error : 8.494154047993074

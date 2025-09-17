@@ -81,6 +81,19 @@ reports_validation = {
              "source": {
                  "bsonType": "string",
                  "description": "The source used for acquiring the data i.e. 'citizen' or 'social' "
+             },
+             "created_stream": {
+                 "bsonType": "boolean",
+                 "description": "Tells if the twitter stream data is created or not."
+             },
+             "stream_details": {
+                 "bsonType": "object",
+                 "required": ["official_id", "start_time", "end_time"],
+                 "properties": {
+                     "official_id": "string",
+                     "start_time": "datetime",
+                     "end_time": "datetime"
+                 }
              }
          }}
 }
