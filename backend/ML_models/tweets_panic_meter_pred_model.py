@@ -1,17 +1,13 @@
 import pickle
-import pandas as pd
-import numpy as np
-from sklearn.model_selection import train_test_split
+
 import nltk
+import numpy as np
+import pandas as pd
+from sklearn.model_selection import train_test_split
 nltk.download('averaged_perceptron_tagger_eng')
 import nlpaug.augmenter.word as naw
-from xgboost import XGBRegressor
-from lightgbm import LGBMRegressor
-from sklearn.linear_model import LinearRegression, Ridge
-from sklearn.svm import SVR
-from sklearn.neural_network import MLPRegressor
-from sklearn.ensemble import RandomForestRegressor, StackingRegressor
-from sklearn.metrics import mean_squared_error, mean_absolute_error
+from lightgbm import LGBMClassifier
+from sklearn.metrics import classification_report
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.decomposition import TruncatedSVD
 
@@ -66,10 +62,14 @@ aug_df = pd.read_csv("data/Augmented_data.csv")
 # Vectorization with TF-IDF + Truncated SVD
 vectorizer = TfidfVectorizer(analyzer="char_wb", ngram_range=(3, 5), max_features=10000)
 X_tfidf = vectorizer.fit_transform(aug_df["conversation"])
+with open("models/tf_idf_vectorizer.pkl", mode = "wb+") as f:
+    pickle.dump(vectorizer, f)
 
 # Dimensionality reduction
 svd = TruncatedSVD(n_components=300, random_state=42)
 X_reduced = svd.fit_transform(X_tfidf)
+with open("models/svd.pkl", mode = "wb+") as f:
+    pickle.dump(svd, f)
 
 # Final preprocessed dataframe
 embedding_df = pd.DataFrame(X_reduced, columns=[f"emb_{i}" for i in range(X_reduced.shape[1])])
@@ -78,43 +78,25 @@ preprocessed_df.to_csv("data/Embedded_dataset.csv", index=False)
 print("Embedding generated successfully")
 
 # Load processed dataset
-embedded_df = pd.read_csv("data/Embedded_dataset.csv")
+embedded_df = pd.read_csv("data/Embedded_dataset_panic_level.csv")
 
 # Splitting the dataset
-X = embedded_df.drop(["panic_meter", "conversation"], axis=1, inplace=False)
-y = embedded_df["panic_meter"]
+X = embedded_df.drop(["panic_urgency", "conversation"], axis=1, inplace=False)
+y = embedded_df["panic_urgency"]
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=21)
 
 # Training the models
-xgb_model = XGBRegressor(n_jobs = -1, reg_lambda = 2)
-linear_regressor_model = LinearRegression(n_jobs = -1)
-lgbm_model = LGBMRegressor(n_jobs = -1)
-rf_model = RandomForestRegressor(n_jobs = -1)
-svr = SVR()
-ridge = Ridge()
-mlp_reg = MLPRegressor(random_state = 21)
-
-estimators = [
-    ("svr", svr),
-    ("xgb", xgb_model),
-    ("ridge", ridge)
-]
-
-model = StackingRegressor(estimators = estimators, final_estimator = mlp_reg, n_jobs = 4, verbose = 10, cv = 5)
+model = LGBMClassifier(n_jobs = 4)
 
 model.fit(X_train, y_train)
 
 # Save the model
-with open("models/stacking_regressor(mpl_reg_final_estimator)_model.pkl", mode = "wb+") as f:
+with open("models/lgbm_classifier_model.pkl", mode = "wb+") as f:
     pickle.dump(model, f)
 
 # Testing the model
 train_pred = model.predict(X_train)
-train_mse = mean_squared_error(y_train, train_pred)
-train_mae = mean_absolute_error(y_train, train_pred)
-print(f"Train mean squared error of {str(model.__class__.__name__)} : {train_mse} | Train mean absolute error : {train_mae}")
+print("Train Classification report : ", classification_report(y_train, train_pred))
 
 test_pred = model.predict(X_test)
-test_mse = mean_squared_error(y_test, test_pred)
-test_mae = mean_absolute_error(y_test, test_pred)
-print(f"Test mean squared error of {str(model.__class__.__name__)} : {test_mse} | Test mean absolute error : {test_mae}")
+print("Test Classification report : ", classification_report(y_test, test_pred))

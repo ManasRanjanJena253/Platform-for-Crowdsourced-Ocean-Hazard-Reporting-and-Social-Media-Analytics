@@ -18,13 +18,8 @@ class PanicMeterModel(nn.Module):
             nn.Conv2d(in_channels = 32, out_channels = 64, kernel_size = 3, padding = 1),
             nn.BatchNorm2d(64),
             nn.LeakyReLU(),
-            nn.MaxPool2d(2),
-
-            nn.Conv2d(in_channels = 64, out_channels = 128, kernel_size = 3, padding=1),
-            nn.BatchNorm2d(128),
-            nn.LeakyReLU(),
             nn.MaxPool2d(2)
-        )
+                                    )
 
         # Computing feature map size dynamically
         with torch.no_grad():
@@ -36,9 +31,10 @@ class PanicMeterModel(nn.Module):
             nn.Flatten(),
             nn.Linear(in_features = n_features, out_features = 256),
             nn.LeakyReLU(),
-            nn.Dropout(0.3),
+            nn.Dropout(0.5),
             nn.Linear(in_features = 256, out_features = 64),
             nn.LeakyReLU(),
+            nn.Dropout(0.5),
             nn.Linear(in_features = 64, out_features = 3)
         )
 

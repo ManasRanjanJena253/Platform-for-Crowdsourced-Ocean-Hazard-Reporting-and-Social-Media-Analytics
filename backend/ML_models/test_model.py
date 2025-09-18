@@ -3,9 +3,15 @@ import gensim.downloader as api
 import numpy as np
 import time
 
-with open("models/randomforest_model.pkl", mode="rb+") as f:
+with open("models/lgbm_classifier_model.pkl", mode="rb+") as f:
     panic_meter_model = pickle.load(f)
     print("model_loaded")
+
+with open("models/svd.pkl", "rb") as f:
+    svd = pickle.load(f)
+
+with open("models/tf_idf_vectorizer.pkl", "rb") as f:
+    vectorizer = pickle.load(f)
 
 fasttext = api.load("glove-twitter-25")
 def sentence_embeddings(text):
@@ -14,12 +20,11 @@ def sentence_embeddings(text):
     :param text: The text to be embedded.
     :return: vector embeddings.
     """
-    # The model is already trained on twitter data, so not removing the emojis as they may carry important emotions, and this won't cause any error.
-    words = text.lower().split()
-    vectors = [fasttext[w] for w in words if w in fasttext]
-    if len(vectors) == 0:
-        return np.zeros(25)
-    return np.mean(vectors, axis = 0)
+
+    vectors = vectorizer.transform([text])
+    vectorized_text = svd.transform(vectors)
+
+    return vectorized_text
 
 try:
     start_time = time.perf_counter()
@@ -29,7 +34,7 @@ try:
     print("Perf counter Time taken : ", end_time - start_time)
     print("Embeddings Created")
 
-    panic_meter = panic_meter_model.predict(embeddings.reshape(1, -1))
+    panic_meter = panic_meter_model.predict(embeddings)
     print(panic_meter)
 except Exception as e:
     print(str(e))

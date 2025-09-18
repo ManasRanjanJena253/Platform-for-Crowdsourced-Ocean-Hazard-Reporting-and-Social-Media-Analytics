@@ -14,6 +14,8 @@ from dotenv import load_dotenv
 import uvicorn
 from geopy.geocoders import Nominatim
 from helper_func import upload_file, authorize_user, generate_uuid, generate_report_id
+from helper_func import sentence_embeddings, cluster_data
+import numpy as np
 
 load_dotenv()
 app = FastAPI()
@@ -23,6 +25,16 @@ db = client["Crowd_Sourced_Ocean_Hazard_Reporting"]
 user_collection = db["user"]
 hotspot_collection = db["hotspot"]
 report_collection = db["reports"]
+
+with open("models/lgbm_classifier_model.pkl", mode="rb+") as f:
+    panic_classifier_model = pickle.load(f)
+    print("model_loaded")
+
+with open("models/svd.pkl", "rb") as f:
+    svd = pickle.load(f)
+
+with open("models/tf_idf_vectorizer.pkl", "rb") as f:
+    vectorizer = pickle.load(f)
 
 # Configuring cloudinary storage for image and report storing
 cloudinary.config(
@@ -218,7 +230,7 @@ async def get_tweets(latitude: float, longitude: float, radius: int,
                     "created_at": tweet["created_at"],
                     "lang": tweet.get("lang"),
                     "text": tweet.get("text"),
-                    # "ai_tags": run_panic_meter(tweet["text"])  # <-- add ML tagging here
+                    "ai_tags": panic_classifier_model.predict(sentence_embeddings(text = tweet["text"], svd = svd, vectorizer = vectorizer))
                 }
                 tweets_out.append(tweet_doc)
 
@@ -360,28 +372,68 @@ async def list_citizen_reports(user_id: str, limit: int = 100):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/{official_id}/hotspots/run_clustering")
-async def run_hotspot_clustering(official_id: str, eps_km: float = 5.0, min_samples: int = 3):
+async def run_hotspot_clustering(official_id: str, method: str = "auto", min_samples: int = 3):
     """
-    API endpoint to run DBSCAN clustering on reports and generate hotspots.
-    Only officials are allowed.
-    :param official_id: The id of the official starting clustering
-    :param eps_km: Radius in km for clustering
-    :param min_samples: Minimum number of reports to form a cluster
-    :return: Number of hotspots created
+    Run DBSCAN/HDBSCAN clustering on reports and generate hotspots.
+    Officials only.
     """
     # Verify official
     official = await user_collection.find_one({"user_id": official_id})
     if not official:
         raise HTTPException(status_code=404, detail="User not found.")
     if official.get("role") != "official":
-        raise HTTPException(status_code=403, detail="Only officials are authorized to run clustering.")
+        raise HTTPException(status_code=403, detail="Only officials are authorized.")
 
     try:
-        pass
-        # hotspots = await run_dbscan_and_store(eps_km=eps_km, min_samples=min_samples)
-        # return {"Status": "Clustering complete", "hotspots_created": len(hotspots)}     These will be added later after the training of dbscan models.
+        # Fetch report locations
+        cursor = report_collection.find({}, {"location.latitude": 1, "location.longitude": 1, "ai_tags": 1, "report_id": 1})
+        reports = await cursor.to_list(length=5000)
+
+        if not reports:
+            return {"Status": "No reports available for clustering."}
+
+        coords = np.array([[r["location"]["latitude"], r["location"]["longitude"]] for r in reports])
+
+        # Run clustering
+        results = cluster_data(coords, method=method, min_samples=min_samples)
+
+        labels = results["labels"]
+        n_clusters = results["n_clusters"]
+
+        # Clear previous hotspots
+        await hotspot_collection.delete_many({})
+
+        # Insert new hotspots
+        hotspot_docs = []
+        for cluster_id in range(n_clusters):
+            cluster_points = [reports[i] for i, lbl in enumerate(labels) if lbl == cluster_id]
+            if not cluster_points:
+                continue
+
+            lats = [p["location"]["latitude"] for p in cluster_points]
+            lons = [p["location"]["longitude"] for p in cluster_points]
+            center_lat = sum(lats) / len(lats)
+            center_lon = sum(lons) / len(lons)
+
+            hotspot_docs.append({
+                "hotspot_id": str(uuid.uuid4()),
+                "location_center": f"{center_lat},{center_lon}",
+                "report_count": len(cluster_points),
+                "urgency_level": np.mean([1 if p["ai_tags"]["urgency"] == "high" else 0.5 if p["ai_tags"]["urgency"] == "medium" else 0 for p in cluster_points]),
+                "reports": [p["report_id"] for p in cluster_points]
+            })
+
+        if hotspot_docs:
+            await hotspot_collection.insert_many(hotspot_docs)
+
+        return {
+            "Status": "Clustering complete",
+            "hotspots_created": len(hotspot_docs),
+            "method_used": results["method"].upper()
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/hotspots/list")
 async def list_hotspots(min_urgency: float = None, limit: int = 100):
@@ -422,7 +474,7 @@ async def hotspot_details(official_id: str, hotspot_id: str):
         hotspot = await hotspot_collection.find_one({"hotspot_id": hotspot_id})
         if not hotspot:
             raise HTTPException(status_code=404, detail="Hotspot not found.")
-        return {"hotspot": hotspot}
+        return {"hotspot": hotspot, "linked_reports": hotspot.get("reports", [])}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

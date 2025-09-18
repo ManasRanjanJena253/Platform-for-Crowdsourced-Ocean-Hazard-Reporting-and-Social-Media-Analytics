@@ -83,16 +83,20 @@ reports_validation = {
                  "description": "The source used for acquiring the data i.e. 'citizen' or 'social' "
              },
              "created_stream": {
-                 "bsonType": "boolean",
+                 "bsonType": "bool",
                  "description": "Tells if the twitter stream data is created or not."
              },
+            "report_url": {
+                "bsonType": "string",
+                "description": "URL of the media file attached to the report"
+            },
              "stream_details": {
                  "bsonType": "object",
                  "required": ["official_id", "start_time", "end_time"],
                  "properties": {
-                     "official_id": "string",
-                     "start_time": "datetime",
-                     "end_time": "datetime"
+                     "official_id": {"bsonType": "string"},
+                     "start_time": {"bsonType": "date"},
+                     "end_time": {"bsonType": "date"}
                  }
              }
          }}
@@ -118,6 +122,11 @@ hotspot_validation = {
             "urgency_level": {
                 "bsonType": "double",
                 "description": "The urgency level of the hazard based on DBSCAN or HDBSCAN."
+            },
+            "reports": {
+                "bsonType": "array",
+                "items": {"bsonType": "string"},
+                "description": "List of report IDs belonging to this hotspot"
             }
         }
     }
