@@ -1,0 +1,315 @@
+
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans:ital,wght@0,100..900;1,100..900&display=swap');
+:root {
+    --bg: #f8f9fa;
+    --surface: #ffffff;
+    --ink: #222222;
+    --ink-2: #555555;
+    --blue: #0d47a1;
+    --purple: #6a1b9a;
+    --teal: #00897b;
+    --orange: #ff7043;
+    --shadow-color: 0deg 0% 0% / 0.08;
+    --radius: 14px;
+    --container: 1200px;
+}
+*{
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Noto Sans', sans-serif;}
+
+body{
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    height: 100vh;
+    background-color: var(--bg);
+    /* color: var(--ink); */
+    background: linear-gradient(to right, #E6E6FA,#D8BFD8);
+    /* font-size: 1rem;
+    line-height: 1.5;
+    font-weight: 400; */
+    overflow-x: hidden;
+}
+.container{
+    width: 768px;
+    max-width: 100%;
+    min-height: 488px;
+    background-color: var(--bg);
+    border-radius: 30px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.35);
+    position: relative;
+    overflow: hidden;
+}
+.container p {
+    font-size: 14px;
+    line-height: 20px;
+    letter-spacing: 0.3px;
+    margin: 20px 0;
+    /* padding: auto;
+    position: relative; */
+}
+.container span{
+    font-size: 12px;
+}
+.container a{
+    text-decoration: none;
+    color: var(--ink);
+    font-size: 13px;
+    margin: 15px 0 10px;
+    font-weight: 500;
+}
+.container button{
+    background: linear-gradient(135deg, var(--blue), var(--purple));
+    color: white;
+    box-shadow: 0 8px 24px rgba(13, 71, 161, 0.25);
+    cursor: pointer;
+    border: 1px solid transparent;
+    /* border-color: #ffffff; */
+    padding: 10px 45px;
+    border-radius: 999px;
+    font-weight: 600;
+    font-size: 12px;
+    margin-top: 10px;
+    /* margin-bottom: 10px; */
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    /* transition: all 0.3s ease; */
+}
+
+.container button.hidden{
+    background: transparent;
+    /* border: 2px solid #fff;
+    color: #fff; */
+    border-color: #ffffff;
+}
+.container form{
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 0 40px;
+    height: 100%;
+    background-color: var(--bg);
+}
+.container input{
+    background-color: var(--surface);
+    border: none;
+    padding: 10px 15px;
+    margin: 8px 0;
+    font-size: 13px;
+    width: 100%;
+    border-radius: 999px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+    outline: none;
+    /* transition: all 0.3s ease; */
+}
+.form-container{
+    position: absolute;
+    top: 0;
+    height: 100%;
+    transition: all 0.6s ease-in-out;
+}
+.sign-in{
+    left: 0;
+    width: 50%;
+    z-index: 2;
+}
+.container.active .sign-in {
+    /* left: 0;
+    width: 50%;
+    z-index: 2; */
+    transform: translateX(100%);
+}
+.sign-up{
+    left: 0;
+    width: 50%;
+    opacity: 0;
+    z-index: 1;
+}
+.container.active .sign-up{
+    transform: translateX(100%);
+    animation: move 0.6s;
+    opacity: 1;
+    z-index: 5;
+}
+
+ @keyframes move{
+    0%, 49.99%{
+
+        opacity: 0;
+        z-index: 1;
+
+    }
+    50%, 100%{
+
+        opacity: 1;
+        z-index: 5;
+    }
+}
+/* .social-icons{
+    border: 1px solid #ccc;
+    border-radius: 20%;
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    margin: 0 3px;
+    height: 40px;
+    width: 40px;
+} */
+.social-icons {
+
+    margin: 0 3px;
+    height: 40px;
+    width: 40px;
+    margin-top: 10px;
+    align-items: center;
+}
+.social-icons a{
+    border: 1px solid #ccc;
+    border-radius: 20%;
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    margin: 0 3px;
+    padding: auto;
+    margin-top: auto;
+    height: 30px;
+    width: 150%;
+}
+.toggle-container{
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: 50%;
+    height: 100%;
+    overflow: hidden;
+    transition: all 0.6s ease-in-out;
+    border-radius: 150px 0 0 100px;
+    background: linear-gradient(135deg, var(--blue), var(--purple));
+    z-index: 1000;
+}
+.container.active .toggle-container{
+    transform: translateX(-100%);
+    border-radius: 0 150px 100px 0;
+}
+.toggle{
+    background: linear-gradient(135deg, var(--blue), var(--purple));
+    position: relative;
+    left: -100%;
+    width: 200%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    transform: translateX(0);
+    transition: all 0.6s ease-in-out;
+}
+.container.active .toggle{
+
+    transform: translateX(50%);
+ 
+}
+
+.toggle-panel {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    /* width: 100%; */
+    position: absolute;
+    width: 50%;
+    height: 100%;
+    padding: 0 30px ;
+    text-align: center;
+    top:0;
+    transform: translateX(0);
+    transition: all 0.6s ease-in-out ;
+
+    /*box-sizing: border-box;
+    top: 0;
+    left: 0;
+    transform: translateX(0);
+    transition: transform 0.6s ease-in-out;
+    background: transparent;
+    opacity: 1;
+    z-index: 2; */
+}
+
+.toggle-left{
+    transform: translateX(-200%);
+    left:0;
+}
+.container.active .toggle-left{
+    transform: translateX(0); 
+}
+.toggle-right{
+    right: 0;
+    transform: translateX(0);
+}
+.container.active .toggle-right{
+    transform: translateX(200%);
+}
+h1 {
+  font-size: 2em;   /* same as browser default (~32px) */
+  font-weight: 700; /* keep it bold */
+  margin: 10px 0;
+}
+
+h2 {
+  font-size: 1.5em; /* ~24px */
+  font-weight: 600;
+  margin: 8px 0;
+}
+p {
+  font-size: 0.9em; /* ~14px */
+  font-weight: 400;
+  line-height: 1.4;
+  margin: 10px 0;
+}
+/* Make normal text inside the main container black (keeps button text white) */
+.container {
+  color: #000; /* form text black; buttons keep their color: white from .container button */
+}
+
+/* Explicit sizes for headings to preserve original look */
+h1 {
+  font-size: 32px;   /* same as typical browser default ~2em (adjust if you want different) */
+  font-weight: 700;
+  margin: 10px 0;
+}
+
+h2 {
+  font-size: 24px;   /* ~1.5em */
+  font-weight: 600;
+  margin: 8px 0;
+}
+
+/* Ensure inputs/links inherit text color where appropriate */
+.container input,
+.container span,
+.container p,
+.container a {
+  color: inherit;
+}
+
+
+/* .toggle-panel.toggle-right {
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+}
+
+.toggle-panel.toggle-right h1 {
+    margin-bottom: 10px;
+}
+.toggle-panel.toggle-right p {
+    margin-bottom: 12px;
+    margin-top: 0;
+}
+.toggle-panel.toggle-right button {
+    margin-top: 8px;
+}  */
