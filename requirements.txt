@@ -21,3 +21,12 @@ tqdm~=4.67.1
 numpy~=1.26.4
 nlpaug~=1.1.11
 openpyxl
+seaborn~=0.13.2
+matplotlib~=3.10.6
+reverse-geocoder~=1.5.1
+tweepy~=4.16.0
+transformers~=4.56.2
+googletrans~=4.0.2
+bcrypt~=4.3.0
+faker~=37.8.0
+pymongo~=4.14.1

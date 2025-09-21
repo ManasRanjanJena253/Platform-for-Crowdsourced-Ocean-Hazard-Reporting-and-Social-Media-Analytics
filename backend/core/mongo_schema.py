@@ -1,8 +1,15 @@
 import asyncio
-
+import os
 from motor.motor_asyncio import AsyncIOMotorClient
+from dotenv import load_dotenv
+from pymongo.server_api import ServerApi
 
-client = AsyncIOMotorClient(host = "localhost", port = 27017)
+
+load_dotenv()
+
+uri = os.getenv("MONGO_URI")
+
+client = AsyncIOMotorClient(uri, server_api = ServerApi("1"))
 
 db_name = "Crowd_Sourced_Ocean_Hazard_Reporting"
 
@@ -32,7 +39,7 @@ user_validation = {
              "hashed_pwd": {
                  "bsonType": "string",
                  "description": "The hashed password of the user for security."
-             }
+             },
          }}
 }
 
@@ -132,11 +139,44 @@ hotspot_validation = {
     }
 }
 
+twitter_validation = {
+    "$jsonSchema": {
+        "bsonType": "object",
+        "required": ["Text", "Time", "City", "latitude", "longitude"],
+        "properties": {
+            "Text": {
+                "bsonType": "string",
+                "description": "The tweet data"
+            },
+            "Time": {
+                "bsonType": "date",
+                "description": "The time of tweet"
+            },
+            "City": {
+                "bsonType": "string",
+                "description": "The name of the city the tweet was done from"
+            },
+            "Sub_city": {
+                "bsonType": "string",
+                "description": "The district or area from where the tweet was done from"
+            },
+            "latitude": {
+                "bsonType": "double",
+                "description": "The latitude of the place"
+            },
+            "longitude": {
+                "bsonType": "double",
+                "description": "The longitude of the place"
+            }
+        }
+    }
+}
+
 async def create_collections():
     # await client.drop_database(db_name)
     db = client[db_name]
-    collections = ["user", "hotspot", "reports"]
-    validators = [user_validation, hotspot_validation, reports_validation]
+    collections = ["user", "hotspot", "reports", "twitter_stream"]
+    validators = [user_validation, hotspot_validation, reports_validation, twitter_validation]
     built_collections = await db.list_collections()
     built_collections_list = await built_collections.to_list()
 

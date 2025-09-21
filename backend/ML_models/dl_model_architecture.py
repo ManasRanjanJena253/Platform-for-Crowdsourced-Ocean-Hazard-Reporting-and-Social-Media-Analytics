@@ -7,18 +7,39 @@ class PanicMeterModel(nn.Module):
         self.features = nn.Sequential(
             nn.Conv2d(in_channels = 3, out_channels = 16, kernel_size = 3, padding = 1),
             nn.BatchNorm2d(16),
-            nn.LeakyReLU(),
+            nn.ReLU(),
             nn.MaxPool2d(2),
 
             nn.Conv2d(in_channels = 16, out_channels = 32, kernel_size = 3, padding = 1),
             nn.BatchNorm2d(32),
-            nn.LeakyReLU(),
+            nn.ReLU(),
             nn.MaxPool2d(2),
 
             nn.Conv2d(in_channels = 32, out_channels = 64, kernel_size = 3, padding = 1),
             nn.BatchNorm2d(64),
-            nn.LeakyReLU(),
+            nn.ReLU(),
+            nn.MaxPool2d(2),
+
+            nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, padding=1),
+            nn.BatchNorm2d(128),
+            nn.ReLU(),
+            nn.MaxPool2d(2),
+
+            nn.Conv2d(in_channels=128, out_channels=256, kernel_size=3, padding=1),
+            nn.BatchNorm2d(256),
+            nn.ReLU(),
+            nn.MaxPool2d(2),
+
+            nn.Conv2d(in_channels=256, out_channels=128, kernel_size=3, padding=1),
+            nn.BatchNorm2d(128),
+            nn.ReLU(),
+            nn.MaxPool2d(2),
+
+            nn.Conv2d(in_channels=128, out_channels=64, kernel_size=3, padding=1),
+            nn.BatchNorm2d(64),
+            nn.ReLU(),
             nn.MaxPool2d(2)
+
                                     )
 
         # Computing feature map size dynamically
@@ -30,12 +51,12 @@ class PanicMeterModel(nn.Module):
         self.regressor = nn.Sequential(
             nn.Flatten(),
             nn.Linear(in_features = n_features, out_features = 256),
-            nn.LeakyReLU(),
+            nn.ReLU(),
             nn.Dropout(0.5),
             nn.Linear(in_features = 256, out_features = 64),
-            nn.LeakyReLU(),
+            nn.ReLU(),
             nn.Dropout(0.5),
-            nn.Linear(in_features = 64, out_features = 3)
+            nn.Linear(in_features = 64, out_features = 1)
         )
 
     def forward(self, x):

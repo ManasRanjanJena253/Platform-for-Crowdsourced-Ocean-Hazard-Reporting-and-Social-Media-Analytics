@@ -32,29 +32,7 @@ def find_optimal_eps(data, min_samples=5, percentile=90):
 
 def cluster_data(data, method='auto', scale=True, visualize=True, **kwargs):
     """
-    Main clustering function that automatically clusters your data
-    
-    Parameters:
-    -----------
-    data : array-like or DataFrame
-        Input data to cluster
-    method : str, default='auto'
-        Clustering method: 'auto', 'dbscan', 'hdbscan'
-    scale : bool, default=True
-        Whether to standardize the data
-    visualize : bool, default=True
-        Whether to create visualization plots
-    **kwargs : additional parameters for clustering algorithms
-    
-    Returns:
-    --------
-    dict : Dictionary containing:
-        - 'labels': cluster labels
-        - 'n_clusters': number of clusters found
-        - 'n_noise': number of noise points
-        - 'metrics': clustering quality metrics
-        - 'model': fitted clustering model
-        - 'data_scaled': scaled data (if scale=True)
+    Main clustering function that automatically clusters data
     """
     
     # Convert to numpy array if needed

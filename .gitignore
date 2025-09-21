@@ -3,3 +3,7 @@ backend/main/ocean-hazard-reporting-firebase-adminsdk-fbsvc-f22d15ad48.json
 backend/ML_models/glove_model.kv.vectors.npy
 backend/ML_models/data/Augmented_data.csv
 backend/ML_models/data/Embedded_dataset.csv
+test.py
+frontend/PROTOWITHDASHBOARD/node_modules
+frontend/login-authorized/node_modules
+frontend/LandingPageProtoMultiLingual/node_modules

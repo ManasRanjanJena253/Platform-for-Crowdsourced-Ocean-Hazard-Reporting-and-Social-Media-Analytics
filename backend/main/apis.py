@@ -1,9 +1,14 @@
+import asyncio
+import json
 import os
 import pickle
 from datetime import datetime, UTC, timezone, timedelta
 import requests
+import torch
+import torchvision
 from fastapi import FastAPI, Form, UploadFile, Request, Response, File
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 import cloudinary
 import cloudinary.uploader
 from fastapi.exceptions import HTTPException
@@ -25,6 +30,7 @@ db = client["Crowd_Sourced_Ocean_Hazard_Reporting"]
 user_collection = db["user"]
 hotspot_collection = db["hotspot"]
 report_collection = db["reports"]
+twitter_stream_collection = db["twitter_stream"]
 
 with open("models/lgbm_classifier_model.pkl", mode="rb+") as f:
     panic_classifier_model = pickle.load(f)
@@ -116,14 +122,20 @@ async def upload_report(user_id, latitude: float, longitude: float, file: Upload
     try:
         report_url = await upload_file(file)
 
+        state_dict = torch.load("models/panic_meter_mobilenet_model.pth")
+        model = torchvision.models.mobilenet_v2()
+        model.load_state_dict(state_dict)
+        with torch.inference_mode():
+            model.eval()
+            urgency = model.forward()
+
         # --------- AI MODEL PLACEHOLDER ----------
         # Replace the following stub with your actual AI tagging
         ai_tags = {
-            "classification": "Other",   # e.g. "Flood", "Tsunami" etc.
-            "urgency": "low"             # e.g. "low", "medium", "high"
+            "classification": "flood",   # e.g. "Flood", "Tsunami" etc.
+            "urgency": "Medium"             # e.g. "low", "medium", "high"
         }
         # ai_tags = await run_ai_tagging_model(report_url, ...)  # <--- your model hook
-        # ----------------------------------------
 
         await report_collection.insert_one({
             "user_id": user_id,
@@ -135,12 +147,9 @@ async def upload_report(user_id, latitude: float, longitude: float, file: Upload
                 "city": city,
                 "suburb": suburb
             },
-            "timestamp": time,
-            "report_url": report_url,
             "ai_tags": ai_tags,
-            "source": "citizen",           # important: required by schema
-            "created_stream": False,       # default, updated only when streaming starts
-            "stream_details": {}           # placeholder, updated only for officials' streams
+            "timestamp": time,
+            "report_url": report_url
         })
 
         return {"Status": "Successful", "report_id": report_id}
@@ -268,8 +277,7 @@ async def start_twitter_stream(official_id: str, duration_minutes: int = 30):
             "report_id": f"stream-{uuid.uuid4()}",
             "location": {"latitude": 0, "longitude": 0},  # not relevant for stream doc
             "timestamp": start_time,
-            "report_url": "",
-            "ai_tags": {"classification": "Other", "urgency": "low"},
+            "report_url": "twitter data",
             "source": "social",
             "created_stream": True,
             "stream_details": {
@@ -281,7 +289,6 @@ async def start_twitter_stream(official_id: str, duration_minutes: int = 30):
         return {"Status": "Stream Started", "start_time": start_time, "end_time": end_time}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.get("/stream_status")
 async def get_stream_status():
@@ -395,7 +402,7 @@ async def run_hotspot_clustering(official_id: str, method: str = "auto", min_sam
         coords = np.array([[r["location"]["latitude"], r["location"]["longitude"]] for r in reports])
 
         # Run clustering
-        results = cluster_data(coords, method=method, min_samples=min_samples)
+        results = cluster_data(coords, method=method)
 
         labels = results["labels"]
         n_clusters = results["n_clusters"]
@@ -461,7 +468,7 @@ async def hotspot_details(official_id: str, hotspot_id: str):
     Only officials are allowed.
     :param official_id: The id of the official
     :param hotspot_id: The id of the hotspot
-    :return: Hotspot details including report_ids
+    :return:  details including report_ids
     """
     # Verify official
     official = await user_collection.find_one({"user_id": official_id})
@@ -483,6 +490,20 @@ async def list_all_reports(limit: int = 500):
     cursor = report_collection.find({}).sort("timestamp", -1).limit(limit)
     reports = await cursor.to_list(length=limit)
     return {"reports": reports}
+
+
+# Fake apis for prototype showcase
+async def event_generator():
+    cursor = twitter_stream_collection.find({}, {"_id": 0})    # No need to await the find query because it by default returns a cursor object.
+    async for doc in cursor:
+        # Convert datetime to string for JSON
+        doc["Time"] = doc["Time"].isoformat()
+        await asyncio.sleep(2)  # simulating delay
+        yield f"data: {json.dumps(doc)}\n\n"
+
+@app.get("/fake_stream")
+async def fake_stream():
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 if __name__ == "__main__":
     uvicorn.run(app = app, port = 8001)
